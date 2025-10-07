@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FitGenie AI Workout Planner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'brand-primary': '#00F5A0',
+              'brand-secondary': '#00D9E0',
+              'dark-bg': '#121212',
+              'dark-card': '#1E1E1E',
+              'dark-border': '#2D2D2D',
+              'light-text': '#E0E0E0',
+              'medium-text': '#A0A0A0',
+            },
+            animation: {
+              'pulse-fire': 'pulse-fire 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'glow': 'glow 1.5s ease-in-out infinite alternate',
+            },
+            keyframes: {
+              'pulse-fire': {
+                '0%, 100%': { opacity: 1, transform: 'scale(1)' },
+                '50%': { opacity: 0.8, transform: 'scale(1.05)' },
+              },
+              'glow': {
+                'from': { textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 12px #00F5A0, 0 0 16px #00F5A0' },
+                'to': { textShadow: '0 0 8px #fff, 0 0 16px #00D9E0, 0 0 24px #00D9E0, 0 0 32px #00D9E0' },
+              }
+            },
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.22.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "recharts": "https://aistudiocdn.com/recharts@^3.2.1"
+  }
+}
+</script>
+</head>
+  <body class="bg-dark-bg text-light-text">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
