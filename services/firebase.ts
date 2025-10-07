@@ -2,15 +2,14 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
-// TODO: Replace the placeholder values below with your actual Firebase project configuration.
-// You can find these values in your Firebase project settings under "General".
+// Your Firebase project configuration.
 const firebaseConfig = {
   apiKey: "AIzaSyD_9JH77-Rw01eFmbgGTJPiDRD2NIJcF6A",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  authDomain: "fitgenie-app.firebaseapp.com",
+  projectId: "fitgenie-app",
+  storageBucket: "fitgenie-app.firebasestorage.app",
+  messagingSenderId: "721854165371",
+  appId: "1:721854165371:web:bc307bee86873bb69e8dde"
 };
 
 
