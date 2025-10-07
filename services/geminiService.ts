@@ -1,17 +1,27 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { DetailedExercise, FoodInfo, WorkoutSchedule } from "../types";
 
-const API_KEY = process.env.API_KEY;
+// Lazily initialize the AI client to prevent app crash on load if API key is missing.
+let ai: GoogleGenAI | null = null;
 
-if (!API_KEY) {
-    throw new Error("API_KEY environment variable not set");
+function getAiClient(): GoogleGenAI {
+    if (ai) {
+        return ai;
+    }
+    const API_KEY = process.env.API_KEY;
+    if (!API_KEY) {
+        // This error will be caught by the calling function's try/catch block.
+        throw new Error("API_KEY environment variable not set. AI features are disabled.");
+    }
+    ai = new GoogleGenAI({ apiKey: API_KEY });
+    return ai;
 }
 
-const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 export async function getExerciseDetails(exerciseName: string): Promise<DetailedExercise | null> {
     try {
-        const response = await ai.models.generateContent({
+        const genAI = getAiClient();
+        const response = await genAI.models.generateContent({
             model: "gemini-2.5-flash",
             contents: `Provide a detailed, step-by-step guide for performing a '${exerciseName}'. Include information on proper form, primary muscles worked, common mistakes to avoid, and breathing techniques. Also, generate a simple, clear, minimalist SVG illustration of the exercise. The SVG should be a single string, have a viewBox="0 0 100 100", use a white stroke, and be visually appealing on a dark background.`,
             config: {
@@ -53,7 +63,8 @@ export async function getExerciseDetails(exerciseName: string): Promise<Detailed
 
 export async function getFoodNutrition(query: string): Promise<FoodInfo | null> {
     try {
-        const response = await ai.models.generateContent({
+        const genAI = getAiClient();
+        const response = await genAI.models.generateContent({
             model: "gemini-2.5-flash",
             contents: `Provide the estimated nutritional information for "${query}". If the query is unclear, make a reasonable assumption (e.g., 'milk' means '1 cup of whole milk').`,
             config: {
@@ -139,7 +150,8 @@ Ensure the response strictly adheres to the provided JSON schema.`;
     };
 
     try {
-        const response = await ai.models.generateContent({
+        const genAI = getAiClient();
+        const response = await genAI.models.generateContent({
             model: "gemini-2.5-flash",
             contents: prompt,
             config: {
