@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { WORKOUT_SCHEDULE as INITIAL_WORKOUT_SCHEDULE, DAYS_OF_WEEK } from './constants';
 import type { UserSettings, Exercise, WorkoutDay, FoodLog, CalorieData, WorkoutLog, CompletedExercise, WorkoutSchedule, FoodInfo } from './types';
@@ -8,33 +7,81 @@ import WorkoutDetailModal from './components/WorkoutDetailModal';
 import CalorieTracker from './components/CalorieTracker';
 import UserSettingsModal from './components/UserSettingsModal';
 import { DumbbellIcon, SparklesIcon } from './components/Icons';
-import { useLocalStorage } from './hooks/useLocalStorage';
 import WorkoutHistory from './components/WorkoutHistory';
 import ProgressTracker from './components/ProgressTracker';
 import StreakTracker from './components/StreakTracker';
 import LogWorkoutModal from './components/LogWorkoutModal';
 import WorkoutGeneratorModal from './components/WorkoutGeneratorModal';
 import BarcodeScannerModal from './components/BarcodeScannerModal';
+import { useAuth } from './contexts/AuthContext';
+import { db } from './services/firebase';
+import { doc, onSnapshot, collection, query, where, orderBy, addDoc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import Loader from './components/Loader';
 
 export default function App() {
-  const [userSettings, setUserSettings] = useLocalStorage<UserSettings | null>('userSettings', null);
-  const [foodLog, setFoodLog] = useLocalStorage<FoodLog[]>('foodLog', []);
-  const [caloriesBurned, setCaloriesBurned] = useLocalStorage<number>('caloriesBurned', 0);
-  const [workoutHistory, setWorkoutHistory] = useLocalStorage<WorkoutLog[]>('workoutHistory', []);
-  const [workoutSchedule, setWorkoutSchedule] = useLocalStorage<WorkoutSchedule>('workoutSchedule', INITIAL_WORKOUT_SCHEDULE);
-  
+  const { user, logout } = useAuth();
+  const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
+  const [foodLog, setFoodLog] = useState<FoodLog[]>([]);
+  const [workoutHistory, setWorkoutHistory] = useState<WorkoutLog[]>([]);
+  const [workoutSchedule, setWorkoutSchedule] = useState<WorkoutSchedule>(INITIAL_WORKOUT_SCHEDULE);
+  const [loading, setLoading] = useState(true);
+
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isGeneratorModalOpen, setIsGeneratorModalOpen] = useState(false);
   const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
   const [workoutToLog, setWorkoutToLog] = useState<WorkoutDay | null>(null);
 
-
   useEffect(() => {
-    if (!userSettings) {
-      setIsSettingsModalOpen(true);
-    }
-  }, [userSettings]);
+    if (!user) return;
+
+    // Listen to user document for settings and schedule
+    const userDocRef = doc(db, 'users', user.uid);
+    const unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.settings) {
+          setUserSettings(data.settings);
+        } else {
+          // If no settings, open modal for initial setup
+          setIsSettingsModalOpen(true);
+        }
+        if (data.schedule) {
+          setWorkoutSchedule(data.schedule);
+        }
+      } else {
+        // First time user, open settings modal
+        setIsSettingsModalOpen(true);
+      }
+      setLoading(false);
+    });
+
+    // Listen to workout history collection
+    const workoutQuery = query(collection(db, 'workoutHistory'), where('userId', '==', user.uid), orderBy('date', 'desc'));
+    const unsubscribeWorkouts = onSnapshot(workoutQuery, (querySnapshot) => {
+      const history: WorkoutLog[] = [];
+      querySnapshot.forEach((doc) => {
+        history.push({ id: doc.id, ...doc.data() } as WorkoutLog);
+      });
+      setWorkoutHistory(history);
+    });
+
+    // Listen to food log collection
+    const foodQuery = query(collection(db, 'foodLogs'), where('userId', '==', user.uid));
+    const unsubscribeFood = onSnapshot(foodQuery, (querySnapshot) => {
+      const logs: FoodLog[] = [];
+      querySnapshot.forEach((doc) => {
+        logs.push({ id: doc.id, ...doc.data() } as FoodLog);
+      });
+      setFoodLog(logs);
+    });
+
+    return () => {
+      unsubscribeUser();
+      unsubscribeWorkouts();
+      unsubscribeFood();
+    };
+  }, [user]);
 
   const today = useMemo(() => {
     const dayIndex = new Date().getDay();
@@ -52,48 +99,71 @@ export default function App() {
     return { week: weekType, dayWorkout: workoutForDay };
   }, [today, workoutSchedule]);
 
-  const handleSaveSettings = (settings: UserSettings) => {
+  const handleSaveSettings = async (settings: UserSettings) => {
+    if (!user) return;
+    const userDocRef = doc(db, 'users', user.uid);
+    await updateDoc(userDocRef, { settings }, { merge: true });
     setUserSettings(settings);
     setIsSettingsModalOpen(false);
   };
-
-  const handleGeneratedPlanSave = (newSchedule: WorkoutSchedule) => {
+  
+  const handleGeneratedPlanSave = async (newSchedule: WorkoutSchedule) => {
+    if (!user) return;
+    const userDocRef = doc(db, 'users', user.uid);
+    await updateDoc(userDocRef, { schedule: newSchedule }, { merge: true });
     setWorkoutSchedule(newSchedule);
     setIsGeneratorModalOpen(false);
   };
 
-  const handleLogWorkout = (completedExercises: CompletedExercise[]) => {
-    if (!workoutToLog) return;
-
+  const handleLogWorkout = async (completedExercises: CompletedExercise[]) => {
+    if (!workoutToLog || !user) return;
     const todayStr = new Date().toLocaleDateString('en-CA');
-
-    const newLog: WorkoutLog = {
-      id: Date.now().toString(),
+    const newLog = {
+      userId: user.uid,
       date: todayStr,
       week: week,
       day: workoutToLog.day,
       type: workoutToLog.type,
       exercises: completedExercises,
     };
-    setWorkoutHistory(prev => [...prev, newLog].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    await addDoc(collection(db, 'workoutHistory'), newLog);
     setWorkoutToLog(null);
   };
 
-  const handleFoodScanned = (food: FoodInfo) => {
-    setFoodLog(prevLog => [...prevLog, { ...food, id: Date.now().toString() }]);
+  const handleAddFood = async (food: FoodInfo) => {
+    if (!user) return;
+    const newFoodLog = {
+      userId: user.uid,
+      ...food,
+      createdAt: new Date(),
+    };
+    await addDoc(collection(db, 'foodLogs'), newFoodLog);
   };
 
+  const handleRemoveFood = async (id: string) => {
+    if (!user) return;
+    await deleteDoc(doc(db, 'foodLogs', id));
+  };
+  
   const calorieData: CalorieData = useMemo(() => {
     const totalCaloriesConsumed = foodLog.reduce((sum, item) => sum + item.calories, 0);
     return {
-        consumed: totalCaloriesConsumed,
-        burned: caloriesBurned,
+      consumed: totalCaloriesConsumed,
+      burned: userSettings?.caloriesBurned || 0, // Placeholder for burned calories
     };
-  }, [foodLog, caloriesBurned]);
+  }, [foodLog, userSettings]);
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-dark-bg flex justify-center items-center">
+        <Loader size="lg" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-dark-bg font-sans p-4 pb-20 max-w-2xl mx-auto">
-      <Header onSettingsClick={() => setIsSettingsModalOpen(true)} />
+      <Header onSettingsClick={() => setIsSettingsModalOpen(true)} onLogout={logout} />
 
       <main className="mt-6 space-y-8">
         <StreakTracker history={workoutHistory} />
@@ -139,9 +209,8 @@ export default function App() {
                 settings={userSettings}
                 calorieData={calorieData}
                 foodLog={foodLog}
-                setFoodLog={setFoodLog}
-                caloriesBurned={caloriesBurned}
-                setCaloriesBurned={setCaloriesBurned}
+                onAddFood={handleAddFood}
+                onRemoveFood={handleRemoveFood}
                 onOpenBarcodeScanner={() => setIsBarcodeScannerOpen(true)}
             />
         )}
@@ -177,7 +246,7 @@ export default function App() {
       {isBarcodeScannerOpen && (
         <BarcodeScannerModal
           onClose={() => setIsBarcodeScannerOpen(false)}
-          onFoodScanned={handleFoodScanned}
+          onFoodScanned={handleAddFood}
         />
       )}
 

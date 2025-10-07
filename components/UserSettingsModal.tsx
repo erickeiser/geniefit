@@ -1,11 +1,10 @@
-
 import React, { useState } from 'react';
 import type { UserSettings } from '../types';
 import { CloseIcon } from './Icons';
 
 interface UserSettingsModalProps {
   onClose: () => void;
-  onSave: (settings: UserSettings) => void;
+  onSave: (settings: UserSettings) => Promise<void>;
   initialSettings: UserSettings | null;
 }
 
@@ -34,6 +33,7 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ onClose, onSave, 
     activityLevel: 'moderate',
     goal: 'maintenance',
   });
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -43,9 +43,11 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ onClose, onSave, 
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(settings);
+    setIsSaving(true);
+    await onSave(settings);
+    setIsSaving(false);
   };
 
   return (
@@ -88,8 +90,8 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ onClose, onSave, 
               <option value="very_active">Extra active (very hard exercise/sports & physical job)</option>
           </SelectField>
 
-          <button type="submit" className="w-full bg-gradient-to-r from-brand-primary to-brand-secondary text-dark-bg font-bold py-3 rounded-lg mt-4 hover:opacity-90 transition-opacity">
-            Save Profile
+          <button type="submit" className="w-full bg-gradient-to-r from-brand-primary to-brand-secondary text-dark-bg font-bold py-3 rounded-lg mt-4 hover:opacity-90 transition-opacity" disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Save Profile'}
           </button>
         </form>
       </div>

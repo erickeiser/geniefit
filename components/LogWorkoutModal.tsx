@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import type { WorkoutDay, CompletedExercise, CompletedSet } from '../types';
+import type { WorkoutDay, CompletedExercise } from '../types';
 import { CloseIcon, DumbbellIcon } from './Icons';
 
 interface LogWorkoutModalProps {
   workout: WorkoutDay;
   onClose: () => void;
-  onSave: (completedExercises: CompletedExercise[]) => void;
+  onSave: (completedExercises: CompletedExercise[]) => Promise<void>;
 }
 
 const parseSets = (setsStr: string): { numSets: number; numReps: number | null } => {
     if (setsStr.toLowerCase().includes('amrap')) {
-        const numSets = parseInt(setsStr, 10) || 3; // Default to 3 sets for AMRAP if not specified
+        const numSets = parseInt(setsStr, 10) || 3;
         return { numSets, numReps: null };
     }
     const parts = setsStr.toLowerCase().split('x');
@@ -30,6 +30,7 @@ const LogWorkoutModal: React.FC<LogWorkoutModalProps> = ({ workout, onClose, onS
         };
     })
   );
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleSetChange = (exIndex: number, setIndex: number, field: 'reps' | 'weight', value: string) => {
     const newValue = parseInt(value, 10) || 0;
@@ -52,9 +53,11 @@ const LogWorkoutModal: React.FC<LogWorkoutModalProps> = ({ workout, onClose, onS
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(logData);
+    setIsSaving(true);
+    await onSave(logData);
+    // No need to set isSaving to false as the modal will close.
   };
 
   return (
@@ -109,8 +112,8 @@ const LogWorkoutModal: React.FC<LogWorkoutModalProps> = ({ workout, onClose, onS
                 </button>
             </div>
           ))}
-          <button type="submit" className="w-full bg-gradient-to-r from-brand-primary to-brand-secondary text-dark-bg font-bold py-3 rounded-lg mt-4 hover:opacity-90 transition-opacity">
-            Save Workout
+          <button type="submit" className="w-full bg-gradient-to-r from-brand-primary to-brand-secondary text-dark-bg font-bold py-3 rounded-lg mt-4 hover:opacity-90 transition-opacity" disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Save Workout'}
           </button>
         </form>
       </div>

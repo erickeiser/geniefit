@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from 'react';
 import type { UserSettings, CalorieData, FoodLog, FoodInfo } from '../types';
 import { ACTIVITY_LEVELS } from '../constants';
@@ -10,9 +9,8 @@ interface CalorieTrackerProps {
     settings: UserSettings;
     calorieData: CalorieData;
     foodLog: FoodLog[];
-    setFoodLog: React.Dispatch<React.SetStateAction<FoodLog[]>>;
-    caloriesBurned: number;
-    setCaloriesBurned: React.Dispatch<React.SetStateAction<number>>;
+    onAddFood: (food: FoodInfo) => Promise<void>;
+    onRemoveFood: (id: string) => Promise<void>;
     onOpenBarcodeScanner: () => void;
 }
 
@@ -53,52 +51,53 @@ const GoalProgressCircle: React.FC<{ percentage: number; size: number; strokeWid
     );
 };
 
-const CalorieTracker: React.FC<CalorieTrackerProps> = ({ settings, calorieData, foodLog, setFoodLog, caloriesBurned, setCaloriesBurned, onOpenBarcodeScanner }) => {
+const CalorieTracker: React.FC<CalorieTrackerProps> = ({ settings, calorieData, foodLog, onAddFood, onRemoveFood, onOpenBarcodeScanner }) => {
     const [foodQuery, setFoodQuery] = useState('');
     const [isFetchingFood, setIsFetchingFood] = useState(false);
-    const [burnAmount, setBurnAmount] = useState('');
 
-    const { goals } = useMemo(() => {
+    const { goals, tdee } = useMemo(() => {
         const { weight, height, age, gender, activityLevel } = settings;
         
         const weightInKg = weight * 0.453592;
         const heightInCm = height * 2.54;
 
         const bmr = gender === 'male'
-            ? 10 * weightInKg + 6.25 * heightInCm - 5 * age + 5
-            : 10 * weightInKg + 6.25 * heightInCm - 5 * age - 161;
+            ? (10 * weightInKg) + (6.25 * heightInCm) - (5 * age) + 5
+            : (10 * weightInKg) + (6.25 * heightInCm) - (5 * age) - 161;
             
-        const tdee = Math.round(bmr * ACTIVITY_LEVELS[activityLevel]);
+        const calculatedTdee = Math.round(bmr * ACTIVITY_LEVELS[activityLevel]);
+        
         const calculatedGoals = {
-            loss: tdee - 500,
-            maintenance: tdee,
-            gain: tdee + 500,
+            loss: calculatedTdee - 500,
+            maintenance: calculatedTdee,
+            gain: calculatedTdee + 500,
         };
-        return { goals: calculatedGoals };
+        return { goals: calculatedGoals, tdee: calculatedTdee };
     }, [settings]);
 
-    const handleAddFood = async (e: React.FormEvent) => {
+    const totalMacros = useMemo(() => {
+        return foodLog.reduce((acc, item) => {
+            acc.protein += item.protein || 0;
+            acc.carbs += item.carbs || 0;
+            acc.fat += item.fat || 0;
+            return acc;
+        }, { protein: 0, carbs: 0, fat: 0 });
+    }, [foodLog]);
+
+    const handleAddFoodSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!foodQuery.trim()) return;
         setIsFetchingFood(true);
-        const foodInfo: FoodInfo | null = await getFoodNutrition(foodQuery);
-        if (foodInfo) {
-            setFoodLog(prevLog => [...prevLog, { ...foodInfo, id: Date.now().toString() }]);
-        }
-        setFoodQuery('');
-        setIsFetchingFood(false);
-    };
-
-    const handleRemoveFood = (id: string) => {
-        setFoodLog(prevLog => prevLog.filter(item => item.id !== id));
-    };
-
-    const handleAddBurn = (e: React.FormEvent) => {
-        e.preventDefault();
-        const amount = parseInt(burnAmount, 10);
-        if (!isNaN(amount) && amount > 0) {
-            setCaloriesBurned(prev => prev + amount);
-            setBurnAmount('');
+        try {
+            const foodInfo = await getFoodNutrition(foodQuery);
+            if (foodInfo) {
+                await onAddFood(foodInfo);
+            }
+        } catch (error) {
+            console.error("Failed to add food:", error);
+        } finally {
+            setFoodQuery('');
+            setIsFetchingFood(false);
         }
     };
 
@@ -134,7 +133,7 @@ const CalorieTracker: React.FC<CalorieTrackerProps> = ({ settings, calorieData, 
                     <p className="text-xs text-medium-text">Consumed</p>
                 </div>
                 <div>
-                    <p className="text-lg font-bold text-brand-secondary">{caloriesBurned.toLocaleString()}</p>
+                    <p className="text-lg font-bold text-brand-secondary">{calorieData.burned.toLocaleString()}</p>
                     <p className="text-xs text-medium-text">Burned</p>
                 </div>
                 <div>
@@ -143,19 +142,40 @@ const CalorieTracker: React.FC<CalorieTrackerProps> = ({ settings, calorieData, 
                 </div>
             </div>
             
-            <div className="flex justify-around text-xs text-center">
-                {Object.entries(goals).map(([key, value]) => (
-                    <div key={key}>
-                        <p className={`font-bold ${key === settings.goal ? 'text-light-text' : 'text-medium-text'}`}>{value.toLocaleString()}</p>
-                        <p className={`capitalize ${key === settings.goal ? 'text-light-text' : 'text-medium-text'}`}>{key}</p>
-                    </div>
-                ))}
+            <div className="grid grid-cols-3 gap-4 text-center pb-4 border-b border-dark-border">
+                <div>
+                    <p className="text-lg font-bold">{Math.round(totalMacros.protein)}g</p>
+                    <p className="text-xs text-medium-text">Protein</p>
+                </div>
+                <div>
+                    <p className="text-lg font-bold">{Math.round(totalMacros.carbs)}g</p>
+                    <p className="text-xs text-medium-text">Carbs</p>
+                </div>
+                <div>
+                    <p className="text-lg font-bold">{Math.round(totalMacros.fat)}g</p>
+                    <p className="text-xs text-medium-text">Fat</p>
+                </div>
             </div>
+            
+            <div className="space-y-2">
+                <div className="flex justify-around text-xs text-center">
+                    {Object.entries(goals).map(([key, value]) => (
+                        <div key={key}>
+                            <p className={`font-bold ${key === settings.goal ? 'text-light-text' : 'text-medium-text'}`}>{value.toLocaleString()}</p>
+                            <p className={`capitalize ${key === settings.goal ? 'text-light-text' : 'text-medium-text'}`}>{key}</p>
+                        </div>
+                    ))}
+                </div>
+                <p className="text-center text-sm text-medium-text pt-2">
+                    Your estimated daily maintenance (TDEE) is <span className="font-bold text-light-text">{tdee.toLocaleString()}</span> calories.
+                </p>
+            </div>
+
 
             <div className="space-y-4 pt-4 border-t border-dark-border">
                 <div>
                     <h3 className="font-semibold mb-2">Log Food (AI-Powered)</h3>
-                    <form onSubmit={handleAddFood} className="flex gap-2">
+                    <form onSubmit={handleAddFoodSubmit} className="flex gap-2">
                         <input
                             type="text"
                             value={foodQuery}
@@ -187,30 +207,24 @@ const CalorieTracker: React.FC<CalorieTrackerProps> = ({ settings, calorieData, 
 
                 <div className="max-h-32 overflow-y-auto pr-2 space-y-2">
                     {foodLog.map(item => (
-                        <div key={item.id} className="flex justify-between items-center bg-dark-bg p-2 rounded-md text-sm">
-                            <span>{item.name}</span>
-                            <div className="flex items-center gap-3">
+                         <div key={item.id} className="flex justify-between items-start bg-dark-bg p-2 rounded-md text-sm">
+                            <div className="flex-grow pr-2">
+                                <span className="block leading-tight">{item.name}</span>
+                                <p className="text-xs text-medium-text">
+                                    P: {Math.round(item.protein)}g &bull; C: {Math.round(item.carbs)}g &bull; F: {Math.round(item.fat)}g
+                                </p>
+                            </div>
+                            <div className="flex-shrink-0 flex items-center gap-3">
                                 <span className="font-semibold text-brand-primary">{item.calories} cal</span>
-                                <button onClick={() => handleRemoveFood(item.id)}><TrashIcon className="w-4 h-4 text-medium-text hover:text-red-500" /></button>
+                                <button onClick={() => onRemoveFood(item.id)}><TrashIcon className="w-4 h-4 text-medium-text hover:text-red-500" /></button>
                             </div>
                         </div>
                     ))}
                 </div>
 
                  <div>
-                    <h3 className="font-semibold mb-2">Log Calories Burned</h3>
-                    <form onSubmit={handleAddBurn} className="flex gap-2">
-                        <input
-                            type="number"
-                            value={burnAmount}
-                            onChange={(e) => setBurnAmount(e.target.value)}
-                            placeholder="e.g., 300"
-                            className="flex-grow bg-dark-bg border border-dark-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-secondary"
-                        />
-                        <button type="submit" className="bg-brand-secondary text-dark-bg font-bold px-4 py-2 rounded-lg flex items-center justify-center">
-                            <FireIcon className="w-5 h-5" />
-                        </button>
-                    </form>
+                    <h3 className="font-semibold mb-2">Log Calories Burned (Coming Soon)</h3>
+                     <p className="text-sm text-medium-text">Functionality to log burned calories manually will be added in a future update.</p>
                 </div>
             </div>
         </div>

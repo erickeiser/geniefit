@@ -6,7 +6,7 @@ import Loader from './Loader';
 
 interface BarcodeScannerModalProps {
   onClose: () => void;
-  onFoodScanned: (food: FoodInfo) => void;
+  onFoodScanned: (food: FoodInfo) => Promise<void>;
 }
 
 const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ onClose, onFoodScanned }) => {
@@ -48,8 +48,6 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ onClose, onFo
     setError(null);
     setScannedFood(null);
 
-    // In a real app, a library like jsQR would read from the video stream.
-    // Here we simulate finding a barcode.
     const simulatedBarcode = '0123456789012'; 
 
     try {
@@ -66,9 +64,9 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ onClose, onFo
     }
   };
 
-  const handleAddFood = () => {
+  const handleAddFood = async () => {
     if (scannedFood) {
-      onFoodScanned(scannedFood);
+      await onFoodScanned(scannedFood);
       onClose();
     }
   };

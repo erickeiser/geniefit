@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import type { WorkoutSchedule } from '../types';
 import { generateWorkoutPlan } from '../services/geminiService';
@@ -7,7 +6,7 @@ import Loader from './Loader';
 
 interface WorkoutGeneratorModalProps {
   onClose: () => void;
-  onSave: (schedule: WorkoutSchedule) => void;
+  onSave: (schedule: WorkoutSchedule) => Promise<void>;
 }
 
 const SelectField: React.FC<{ label: string; id: string; value: string; onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void; children: React.ReactNode }> = ({ label, id, value, onChange, children }) => (
@@ -33,7 +32,7 @@ const WorkoutGeneratorModal: React.FC<WorkoutGeneratorModalProps> = ({ onClose, 
     try {
       const newSchedule = await generateWorkoutPlan({ goal, level, equipment });
       if (newSchedule) {
-        onSave(newSchedule);
+        await onSave(newSchedule);
       } else {
         setError('Failed to generate a workout plan. The AI might be busy. Please try again.');
       }

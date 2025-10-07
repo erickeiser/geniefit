@@ -31,15 +31,18 @@ export interface UserSettings {
   height: number; // in inches
   activityLevel: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
   goal: 'loss' | 'maintenance' | 'gain';
+  caloriesBurned?: number; // Optional, can be part of daily logs instead
 }
 
 export interface FoodLog {
   id: string;
+  userId: string;
   name: string;
   calories: number;
   protein: number;
   carbs: number;
   fat: number;
+  createdAt: Date;
 }
 
 export interface FoodInfo {
@@ -47,7 +50,6 @@ export interface FoodInfo {
     calories: number;
     protein: number;
     carbs: number;
-
     fat: number;
 }
 
@@ -68,6 +70,7 @@ export interface CompletedExercise {
 
 export interface WorkoutLog {
   id: string;
+  userId: string;
   date: string; // YYYY-MM-DD
   week: 'A' | 'B';
   day: string;
